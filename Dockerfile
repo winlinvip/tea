@@ -21,11 +21,12 @@ RUN apt install -y clang-12 libclang-12-dev libelf-dev
 WORKDIR /toolchain
 RUN mkdir -p /toolchain && git config --global alias.co checkout && git config --global alias.br branch && \
     git config --global alias.ci commit && git config --global alias.st status && \
-    git config --global alias.sm submodule
+    git config --global alias.sm submodule && git config --global alias.sw switch && \
+    git config --global alias.cp cherry-pick
 
 # Download libbpf and bpftool
-RUN git clone https://github.com/libbpf/libbpf.git
-RUN git clone https://github.com/libbpf/bpftool.git
+RUN git clone -b v1.0.1 https://github.com/libbpf/libbpf.git
+RUN git clone -b v7.0.0 https://github.com/libbpf/bpftool.git
 
 # Build and install toolchain
 RUN cd /toolchain/libbpf && mkdir -p /usr/local/libbpf && make -j8 -C /toolchain/libbpf/src OBJDIR=/usr/local/libbpf \
