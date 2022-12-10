@@ -25,6 +25,8 @@ docker run --privileged -d --name tea -it -v $(pwd):/git -w /git ossrs/tea:lates
 docker exec -it -w /git/stun-drop-all tea make
 ```
 
+Please follow bellow examples and tools.
+
 ## STUN Drop All
 
 Drop all STUN packets, including binding request and response packets.
@@ -53,6 +55,8 @@ docker exec -it -w /git/stun-drop-all tea bash -c \
 docker exec -it -w /git/stun-drop-all tea bash -c \
     "echo -en \$(cat binding_response.txt |tr -d [:space:]) |nc -p 55295 -w 1 -u 127.0.0.1 8000"
 ```
+
+> Note: You will see the packets printed by tcpdump and nc server, before installing the eBPF TC qdisc.
 
 Next, build the eBPF program:
 
@@ -109,6 +113,20 @@ Capture the packet by wireshark or tcpdump, then open by Wireshark, select the p
 ![EscapedString](https://user-images.githubusercontent.com/2777660/206857902-85a9a6f3-44f8-48b1-be61-ffecaf794202.jpeg)
 
 Please see example at `stun-drop-all/binding_request.txt` which is copied from `files/h5-play-stun.pcapng`.
+
+## About vmlinux.h
+
+Generate the `vmlinux.h` if you want:
+
+```bash
+bpftool btf dump file /sys/kernel/btf/vmlinux format c > vmlinux.h
+```
+
+> Note: There might be no BTF in docker, so you can run in an ubuntu server.
+
+> Note: For more information about `vmlinux.h`, please read 
+> [BTFGen: One Step Closer to Truly Portable eBPF Programs](https://www.inspektor-gadget.io//blog/2022/03/btfgen-one-step-closer-to-truly-portable-ebpf-programs/), 
+> [BTFHub](https://github.com/aquasecurity/btfhub) and [Running non CO-RE Tracee](https://aquasecurity.github.io/tracee/v0.6.5/building/nocore-ebpf/) 
 
 Winlin 2022.12
 
