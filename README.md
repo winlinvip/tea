@@ -25,10 +25,63 @@ Or start a docker in background:
 ```bash
 mkdir -p ~/git && cd ~/git
 docker run --privileged -d --name tea -it -v $(pwd):/git -w /git/tea ossrs/tea:latest bash
-docker exec -it -w /git/tea/tc_stun_drop_all tea make
+docker exec -it -w /git/tea/libbpf_stun_drop_all tea make 
 ```
 
 Please follow bellow examples and tools.
+
+## LIBBPF: STUN Drop All
+
+Using libbpf to load the eBPF object to TC as clsact.
+
+First, start a docker in background:
+
+```bash
+mkdir -p ~/git && cd ~/git
+docker run -d --privileged --name tea -it -v $(pwd):/git -w /git/tea \
+    ossrs/tea:latest bash
+```
+
+Then, start tcpdump to show packets, and using nc to send packets:
+
+```bash
+# Capture all UDP packets.
+docker exec -it tea tcpdump udp -i any -X
+
+# Start a UDP server, listen at 8000
+docker exec -it tea nc -l -u 8000
+
+# Send STUN binding request.
+docker exec -it -w /git/tea/libbpf_stun_drop_all tea bash -c \
+    "echo -en \$(cat binding_request.txt |tr -d [:space:]) |nc -p 55293 -w 1 -u 127.0.0.1 8000"
+
+# Send STUN binding response.
+docker exec -it -w /git/tea/libbpf_stun_drop_all tea bash -c \
+    "echo -en \$(cat binding_response.txt |tr -d [:space:]) |nc -p 55295 -w 1 -u 127.0.0.1 8000"
+```
+
+> Note: You will see the packets printed by tcpdump and nc server, before installing the eBPF TC qdisc.
+
+Next, build the eBPF program:
+
+```bash
+docker exec -it -w /git/tea/libbpf_stun_drop_all tea make 
+```
+
+And attach eBPF bytecode to TC by:
+
+```bash
+docker exec -it -w /git/tea/libbpf_stun_drop_all tea ./libbpf_stun_drop_all 
+```
+
+All STUN packets are dropped:
+
+```text
+Dropping all STUN packets...
+              nc-12768   [004] d....  7280.186241: bpf_trace_printk: Drop STUN packet, type=0x100, len=20480, magic=0x42a41221
+```
+
+For detail about TC and eBPF, please read [Links: TC](#links-tc) and [Links: LIBBPF](#links-libbpf) section.
 
 ## TC: STUN Drop All
 
@@ -202,7 +255,26 @@ bpftool btf dump file /sys/kernel/btf/vmlinux format c > vmlinux.h
 
 > Note: For more information about `vmlinux.h`, please read 
 > [BTFGen: One Step Closer to Truly Portable eBPF Programs](https://www.inspektor-gadget.io//blog/2022/03/btfgen-one-step-closer-to-truly-portable-ebpf-programs/), 
-> [BTFHub](https://github.com/aquasecurity/btfhub) and [Running non CO-RE Tracee](https://aquasecurity.github.io/tracee/v0.6.5/building/nocore-ebpf/) 
+> [BTFHub](https://github.com/aquasecurity/btfhub) and [Running non CO-RE Tracee](https://aquasecurity.github.io/tracee/v0.6.5/building/nocore-ebpf/)
+
+## About BTF
+
+There are some BTF for old kernel or docker:
+
+* [5.8.0-23-generic.btf.tar.xz](https://github.com/aquasecurity/btfhub-archive/blob/main/ubuntu/20.04/x86_64/5.8.0-63-generic.btf.tar.xz)
+
+Or generate from latest ubuntu server which has `/sys/kernel/btf/vmlinux`:
+
+```bash
+# For example, uname -r is 5.15.0-52-generic
+cp /sys/kernel/btf/vmlinux $(uname -r).btf && tar Jcf $(uname -r).btf.tar.xz $(uname -r).btf
+```
+
+BTF is required for eBPF CO-RE, to compatible with different kernel versions without rebuild it.
+
+> Note: For more information about `BTF` and `CO-RE`, please read
+> [BTFGen: One Step Closer to Truly Portable eBPF Programs](https://www.inspektor-gadget.io//blog/2022/03/btfgen-one-step-closer-to-truly-portable-ebpf-programs/),
+> [BTFHub](https://github.com/aquasecurity/btfhub) and [Running non CO-RE Tracee](https://aquasecurity.github.io/tracee/v0.6.5/building/nocore-ebpf/)
 
 ## Links: TC
 
@@ -212,6 +284,16 @@ bpftool btf dump file /sys/kernel/btf/vmlinux format c > vmlinux.h
 * [[译] Facebook 流量路由最佳实践：从公网入口到内网业务的全路径 XDP/BPF 基础设施（LPC, 2021）](https://arthurchiao.art/blog/facebook-from-xdp-to-socket-zh/) Arthur Chiao 2020
 * [[译] 深入理解 tc ebpf 的 direct-action (da) 模式（2020）](https://arthurchiao.art/blog/understanding-tc-da-mode-zh/) Arthur Chiao 2021
 * [[译] 流量控制（TC）五十年：从基于缓冲队列（Queue）到基于时间（EDT）的演进（Google, 2018）](http://arthurchiao.art/blog/traffic-control-from-queue-to-edt-zh/) Arthur Chiao 2022
+
+## Links: LIBBPF
+
+* [libbpf, contains an eBPF loader which takes over processing LLVM generated eBPF ELF files for loading into the kernel.](https://github.com/libbpf/libbpf)
+* [bpftool, allows inspection and simple manipulation of eBPF programs and maps.](https://github.com/libbpf/bpftool)
+* [Features of bpftool: the thread of tips and examples to work with eBPF objects](https://qmonnet.github.io/whirl-offload/2021/09/23/bpftool-features-thread/) Quentin Monnet 2021
+* [BPF Portability and CO-RE](https://facebookmicrosites.github.io/bpf/blog/2020/02/19/bpf-portability-and-co-re.html) Andrii Nakryiko 2020
+* [BTFGen: One Step Closer to Truly Portable eBPF Programs](https://www.inspektor-gadget.io//blog/2022/03/btfgen-one-step-closer-to-truly-portable-ebpf-programs/) Mauricio Vásquez Bernal 2022
+* [BTFHub, provides BTF files for existing published kernels that don't support embedded BTF.](https://github.com/aquasecurity/btfhub)
+* [[译] BPF 可移植性和 CO-RE（一次编译，到处运行）（Facebook，2020）](https://arthurchiao.art/blog/bpf-portability-and-co-re-zh/#32-btfbpf-type-format) Arthur Chiao 2021
 
 Winlin 2022.12
 
