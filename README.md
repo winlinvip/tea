@@ -12,12 +12,12 @@ docker run --privileged --rm -it ossrs/tea tc qdisc ls
 
 > Note: Please specify `--privileged` for tc and eBPF.
 
-For example, build stun-drop-all:
+For example, build tc_stun_drop_all:
 
 ```bash
 mkdir -p ~/git && cd ~/git
 git clone https://github.com/ossrs/tea.git
-docker run --rm -it -v $(pwd):/git -w /git/tea/stun-drop-all ossrs/tea:latest make
+docker run --rm -it -v $(pwd):/git -w /git/tea/tc_stun_drop_all ossrs/tea:latest make
 ```
 
 Or start a docker in background:
@@ -25,14 +25,14 @@ Or start a docker in background:
 ```bash
 mkdir -p ~/git && cd ~/git
 docker run --privileged -d --name tea -it -v $(pwd):/git -w /git/tea ossrs/tea:latest bash
-docker exec -it -w /git/tea/stun-drop-all tea make
+docker exec -it -w /git/tea/tc_stun_drop_all tea make
 ```
 
 Please follow bellow examples and tools.
 
-## STUN Drop All
+## TC: STUN Drop All
 
-Drop all STUN packets, including binding request and response packets.
+Using tc to load the eBPF object, drop all STUN packets, including binding request and response packets.
 
 First, start a docker in background:
 
@@ -52,11 +52,11 @@ docker exec -it tea tcpdump udp -i any -X
 docker exec -it tea nc -l -u 8000
 
 # Send STUN binding request.
-docker exec -it -w /git/tea/stun-drop-all tea bash -c \
+docker exec -it -w /git/tea/tc_stun_drop_all tea bash -c \
     "echo -en \$(cat binding_request.txt |tr -d [:space:]) |nc -p 55293 -w 1 -u 127.0.0.1 8000"
 
 # Send STUN binding response.
-docker exec -it -w /git/tea/stun-drop-all tea bash -c \
+docker exec -it -w /git/tea/tc_stun_drop_all tea bash -c \
     "echo -en \$(cat binding_response.txt |tr -d [:space:]) |nc -p 55295 -w 1 -u 127.0.0.1 8000"
 ```
 
@@ -65,24 +65,24 @@ docker exec -it -w /git/tea/stun-drop-all tea bash -c \
 Next, build the eBPF program:
 
 ```bash
-docker exec -it -w /git/tea/stun-drop-all tea make 
+docker exec -it -w /git/tea/tc_stun_drop_all tea make 
 ```
 
 And attach eBPF bytecode to TC by:
 
 ```bash
-docker exec -it -w /git/tea/stun-drop-all tea tc qdisc add dev lo clsact &&
-docker exec -it -w /git/tea/stun-drop-all tea tc filter add dev lo egress bpf obj \
-    stun_drop_all_kern.o sec cls da &&
-docker exec -it -w /git/tea/stun-drop-all tea tc filter add dev lo ingress bpf obj \
-    stun_drop_all_kern.o sec cls da
+docker exec -it tea tc qdisc add dev lo clsact &&
+docker exec -it -w /git/tea/tc_stun_drop_all tea tc filter add dev lo egress bpf obj \
+    tc_stun_drop_all_kern.o sec cls da &&
+docker exec -it -w /git/tea/tc_stun_drop_all tea tc filter add dev lo ingress bpf obj \
+    tc_stun_drop_all_kern.o sec cls da
 ```
 
 Now, nc server won't receive STUN packets, and we can check by:
 
 ```bash
-docker exec -it -w /git/tea/stun-drop-all tea \
-    bpftool map dump pinned /sys/fs/bpf/tc/globals/stun_drop_all
+docker exec -it tea \
+    bpftool map dump pinned /sys/fs/bpf/tc/globals/tc_stun_drop_all
 ```
 
 * `key: 0d 00 00 00  value: 03 00 00 00` There were `03` STUN packets dropped.
@@ -90,8 +90,8 @@ docker exec -it -w /git/tea/stun-drop-all tea \
 You can also check the last address by:
 
 ```bash
-docker exec -it -w /git/tea/stun-drop-all tea \
-    bpftool map dump pinned /sys/fs/bpf/tc/globals/stun_drop_all_ports
+docker exec -it tea \
+    bpftool map dump pinned /sys/fs/bpf/tc/globals/tc_stun_drop_all_ports
 ```
 
 * `key: 0d 00 00 00  value: fd d7 40 1f` The port is `0x1f40` (8000) and `0xd7fd` (55293).
@@ -99,21 +99,41 @@ docker exec -it -w /git/tea/stun-drop-all tea \
 You can check the first 8 bytes of last packet payload by:
 
 ```bash
-docker exec -it -w /git/tea/stun-drop-all tea \
-    bpftool map dump pinned /sys/fs/bpf/tc/globals/stun_drop_all_bytes
+docker exec -it tea \
+    bpftool map dump pinned /sys/fs/bpf/tc/globals/tc_stun_drop_all_bytes
 ```
 
 * `key: 0d 00 00 00  value: 00 01 00 50 21 12 a4 42` Which is a binding request.
 
-> Note: Please check by `tree /sys/fs/bpf` for all available maps.
+Because `btf_printk` is not available for TC loader, so we use map to show debugging information, and all maps are 
+pinned to global namespace, please check by:
+
+```bash
+docker exec -it tea tree /sys/fs/bpf
+# /sys/fs/bpf
+# |-- ip -> /sys/fs/bpf/tc/
+# |-- tc
+# |   `-- globals
+# |       |-- tc_stun_drop_all
+# |       |-- tc_stun_drop_all_bytes
+# |       `-- tc_stun_drop_all_ports
+# `-- xdp -> /sys/fs/bpf/tc/
+```
 
 Reset the TC by removing the qdisc:
 
 ```bash
-docker exec -it -w /git/tea/stun-drop-all tea tc qdisc del dev lo clsact
+docker exec -it tea tc qdisc del dev lo clsact
 ```
 
-> Note: You can remove the filter if want to keep the qdisc by `tc filter del dev lo egress` and `tc filter del dev lo ingress`
+Or by remove the filters:
+
+```bash
+docker exec -it tea tc filter del dev lo egress
+docker exec -it tea tc filter del dev lo ingress
+```
+
+For detail about TC and eBPF, please read [Links: TC](#links-tc) section.
 
 ## For SRS
 
@@ -131,11 +151,11 @@ docker run -d --privileged --name tea -it -v $(pwd):/git -w /git/tea \
 To attach to `eth0` for SRS:
 
 ```bash
-docker exec -it -w /git/tea/stun-drop-all tea tc qdisc add dev eth0 clsact &&
-docker exec -it -w /git/tea/stun-drop-all tea tc filter add dev eth0 egress bpf obj \
-    stun_drop_all_kern.o sec cls da &&
-docker exec -it -w /git/tea/stun-drop-all tea tc filter add dev eth0 ingress bpf obj \
-    stun_drop_all_kern.o sec cls da
+docker exec -it -w /git/tea/tc_stun_drop_all tea tc qdisc add dev eth0 clsact &&
+docker exec -it -w /git/tea/tc_stun_drop_all tea tc filter add dev eth0 egress bpf obj \
+    tc_stun_drop_all_kern.o sec cls da &&
+docker exec -it -w /git/tea/tc_stun_drop_all tea tc filter add dev eth0 ingress bpf obj \
+    tc_stun_drop_all_kern.o sec cls da
 ```
 
 If start a SRS or WebRTC server, all WebRTC clients will fail because STUN is disabled.
@@ -156,7 +176,7 @@ The [WebRTC player](http://localhost:8080/players/rtc_player.html?autostart=true
 Reset the TC by removing qdisc:
 
 ```bash
-docker exec -it -w /git/tea/stun-drop-all tea tc qdisc del dev eth0 clsact
+docker exec -it -w /git/tea/tc_stun_drop_all tea tc qdisc del dev eth0 clsact
 ```
 
 > Note: The player should recover if SRS session is not timeout.
@@ -168,7 +188,7 @@ Capture the packet by wireshark or tcpdump, then open by Wireshark, select the p
 
 ![EscapedString](https://user-images.githubusercontent.com/2777660/206857902-85a9a6f3-44f8-48b1-be61-ffecaf794202.jpeg)
 
-Please see example at `stun-drop-all/binding_request.txt` which is copied from `files/h5-play-stun.pcapng`.
+Please see example at `tc_stun_drop_all/binding_request.txt` which is copied from `files/h5-play-stun.pcapng`.
 
 ## About vmlinux.h
 
@@ -183,6 +203,15 @@ bpftool btf dump file /sys/kernel/btf/vmlinux format c > vmlinux.h
 > Note: For more information about `vmlinux.h`, please read 
 > [BTFGen: One Step Closer to Truly Portable eBPF Programs](https://www.inspektor-gadget.io//blog/2022/03/btfgen-one-step-closer-to-truly-portable-ebpf-programs/), 
 > [BTFHub](https://github.com/aquasecurity/btfhub) and [Running non CO-RE Tracee](https://aquasecurity.github.io/tracee/v0.6.5/building/nocore-ebpf/) 
+
+## Links: TC
+
+* [Traffic Control HOWTO](https://tldp.org/HOWTO/Traffic-Control-HOWTO/) Martin A. Brown 2006.
+* [Linux Advanced Routing & Traffic Control HOWTO](https://lartc.org/howto/index.html) Bert Hubert 2012.
+* [netem: Network Emulation](https://wiki.linuxfoundation.org/networking/netem) Linux iproute2.
+* [[译] Facebook 流量路由最佳实践：从公网入口到内网业务的全路径 XDP/BPF 基础设施（LPC, 2021）](https://arthurchiao.art/blog/facebook-from-xdp-to-socket-zh/) Arthur Chiao 2020
+* [[译] 深入理解 tc ebpf 的 direct-action (da) 模式（2020）](https://arthurchiao.art/blog/understanding-tc-da-mode-zh/) Arthur Chiao 2021
+* [[译] 流量控制（TC）五十年：从基于缓冲队列（Queue）到基于时间（EDT）的演进（Google, 2018）](http://arthurchiao.art/blog/traffic-control-from-queue-to-edt-zh/) Arthur Chiao 2022
 
 Winlin 2022.12
 

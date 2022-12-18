@@ -21,7 +21,7 @@ struct bpf_elf_map {
 
 #define MAX_ARRAY_ELEMS 16
 
-struct bpf_elf_map SEC("maps") stun_drop_all = {
+struct bpf_elf_map SEC("maps") tc_stun_drop_all = {
         .type = BPF_MAP_TYPE_ARRAY,
         .size_key = sizeof(__u32), /* (udp dst<<16 | udp src port) % max_elem */
         .size_value = sizeof(__u32), /* dropped packets */
@@ -29,7 +29,7 @@ struct bpf_elf_map SEC("maps") stun_drop_all = {
         .pinning = PIN_GLOBAL_NS,
 };
 
-struct bpf_elf_map SEC("maps") stun_drop_all_ports = {
+struct bpf_elf_map SEC("maps") tc_stun_drop_all_ports = {
         .type = BPF_MAP_TYPE_ARRAY,
         .size_key = sizeof(__u32), /* (udp dst<<16 | udp src port) % max_elem */
         .size_value = sizeof(__u32), /* udp dst<<16 | udp src port */
@@ -37,7 +37,7 @@ struct bpf_elf_map SEC("maps") stun_drop_all_ports = {
         .pinning = PIN_GLOBAL_NS,
 };
 
-struct bpf_elf_map SEC("maps") stun_drop_all_bytes = {
+struct bpf_elf_map SEC("maps") tc_stun_drop_all_bytes = {
         .type = BPF_MAP_TYPE_ARRAY,
         .size_key = sizeof(__u32), /* (udp dst<<16 | udp src port) % max_elem */
         .size_value = sizeof(__u64), /* udp payload first 8 bytes */
@@ -76,10 +76,10 @@ SEC("cls") int cls_main(struct __sk_buff *skb) {
 
     __u32 val = ((__u32)bpf_htons(udph->dest))<<16 | (__u32)bpf_htons(udph->source);
     __u32 key = val % MAX_ARRAY_ELEMS;
-    bpf_map_update_elem(&stun_drop_all_ports, &key, &val, BPF_ANY);
-    bpf_map_update_elem(&stun_drop_all_bytes, &key, &val2, BPF_ANY);
+    bpf_map_update_elem(&tc_stun_drop_all_ports, &key, &val, BPF_ANY);
+    bpf_map_update_elem(&tc_stun_drop_all_bytes, &key, &val2, BPF_ANY);
 
-    __u32 *dropped = bpf_map_lookup_elem(&stun_drop_all, &key);
+    __u32 *dropped = bpf_map_lookup_elem(&tc_stun_drop_all, &key);
     if (dropped) __sync_fetch_and_add(dropped, 1);
     return TC_ACT_SHOT;
 }
