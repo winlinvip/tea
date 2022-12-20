@@ -83,6 +83,91 @@ Dropping all STUN packets...
 
 For detail about TC and eBPF, please read [Links: TC](#links-tc) and [Links: LIBBPF](#links-libbpf) section.
 
+## LIBBPF: STUN NETEM
+
+Using libbpf and TC netem for STUN packets only.
+
+First, start a docker in background:
+
+```bash
+mkdir -p ~/git && cd ~/git
+docker run -d --privileged --name tea -it -v $(pwd):/git -w /git/tea \
+    ossrs/tea:latest bash
+```
+
+Then, start tcpdump to show packets, and using nc to send packets:
+
+```bash
+# Capture all UDP packets.
+docker exec -it tea tcpdump udp -i any -X
+
+# Start a UDP server, listen at 8000
+docker exec -it tea nc -l -u 8000
+
+# Send STUN binding request.
+docker exec -it -w /git/tea/libbpf_stun_netem tea bash -c \
+    "echo -en \$(cat binding_request.txt |tr -d [:space:]) |nc -p 55293 -w 1 -u 127.0.0.1 8000"
+
+# Send STUN binding response.
+docker exec -it -w /git/tea/libbpf_stun_netem tea bash -c \
+    "echo -en \$(cat binding_response.txt |tr -d [:space:]) |nc -p 55295 -w 1 -u 127.0.0.1 8000"
+```
+
+> Note: You will see the packets printed by tcpdump and nc server, before installing the eBPF TC qdisc.
+
+Next, build the eBPF program:
+
+```bash
+docker exec -it -w /git/tea/libbpf_stun_netem tea make 
+```
+
+Add 3s delay for STUN packet:
+
+```bash
+docker exec -it -w /git/tea/libbpf_stun_netem tea \
+    tc qdisc add dev lo root handle 1:0 prio 
+docker exec -it -w /git/tea/libbpf_stun_netem tea \
+    tc qdisc add dev lo parent 1:3 handle 3:0 netem delay 3000ms
+docker exec -it -w /git/tea/libbpf_stun_netem tea \
+    tc filter add dev lo parent 1:0 bpf obj tc_index_to_classid_kern.o sec cls da 
+```
+
+> Note: We add a prio qdisc at `1:0`, which default to deliver packets by `1:1` and `1:2`. And we also create a netem 
+> qdisc `3:0` at `1:3` which set delay to 3s. So we will use `libbpf_stun_netem` to deliver all STUN packets to netem 
+> which is classid `1:3`.
+
+> Note: Please note that `libbpf_stun_netem` is a clsact, which change the `skb->tc_classid` to `3` which is `1:3`, but
+> we need another bpf filter `tc_index_to_classid_kern.o` which apply to netem.
+
+And attach eBPF bytecode to TC by:
+
+```bash
+docker exec -it -w /git/tea/libbpf_stun_netem tea ./libbpf_stun_netem 
+```
+
+If send STUN messages, you'll find the packet is arrived after 3s：
+
+```bash
+Apply netem to all STUN packets...
+              nc-2752    [000] d....  1206.400129: bpf_trace_printk: Apply netem to STUN packet, type=0x100, len=20480, classid=3
+```
+
+You can also check by:
+
+```bash
+docker exec -it -w /git/tea/libbpf_stun_netem tea tc -s class ls dev lo
+#class prio 1:3 parent 1: leaf 3: 
+# Sent 142 bytes 1 pkt (dropped 0, overlimits 0 requeues 0) 
+# backlog 0b 0p requeues 0
+
+docker exec -it -w /git/tea/libbpf_stun_netem tea tc -s qdisc ls dev lo
+#qdisc netem 3: parent 1:3 limit 1000 delay 3.0s
+# Sent 142 bytes 1 pkt (dropped 0, overlimits 0 requeues 0) 
+# backlog 0b 0p requeues 0
+```
+
+You can also add loss and other features from [netem](https://wiki.linuxfoundation.org/networking/netem).
+
 ## TC: STUN Drop All
 
 Using tc to load the eBPF object, drop all STUN packets, including binding request and response packets.
