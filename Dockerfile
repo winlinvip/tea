@@ -6,9 +6,9 @@ ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update -y
 
 ########################################################################################################################
-# Install tc from iproute2, ifconfig from net-tools, ping from iputils-ping, dig from dnsutils, iperf, nc(netcat)
-# and tcpdump
-RUN apt-get install -y iproute2 net-tools iputils-ping dnsutils iperf netcat tcpdump
+# Install tc from iproute2, ifconfig from net-tools, ping from iputils-ping, dig from dnsutils, iperf, nc(netcat),
+# tcpdump and lsb_release
+RUN apt-get install -y iproute2 net-tools iputils-ping dnsutils iperf netcat tcpdump lsb-release
 
 ########################################################################################################################
 # For eBPF.
