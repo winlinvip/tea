@@ -333,7 +333,7 @@ Please see example at `tc_stun_drop_all/binding_request.txt` which is copied fro
 Generate the `vmlinux.h` if you want:
 
 ```bash
-bpftool btf dump file /sys/kernel/btf/vmlinux format c > vmlinux.h
+bpftool btf dump file /sys/kernel/btf/vmlinux format c > vmlinux-ubuntu-focal-5.15.0-52-generic.h
 ```
 
 > Note: There might be no BTF in docker, so you can run in an ubuntu server.
@@ -346,7 +346,8 @@ bpftool btf dump file /sys/kernel/btf/vmlinux format c > vmlinux.h
 
 There are some BTF for old kernel or docker:
 
-* [5.8.0-23-generic.btf.tar.xz](https://github.com/aquasecurity/btfhub-archive/blob/main/ubuntu/20.04/x86_64/5.8.0-63-generic.btf.tar.xz)
+* For Ubuntu 18: [5.4.0-84-generic.btf.tar.xz](https://github.com/aquasecurity/btfhub-archive/blob/main/ubuntu/18.04/x86_64/5.4.0-84-generic.btf.tar.xz)
+* For Ubuntu 20: [5.8.0-23-generic.btf.tar.xz](https://github.com/aquasecurity/btfhub-archive/blob/main/ubuntu/20.04/x86_64/5.8.0-63-generic.btf.tar.xz)
 
 Or generate from latest ubuntu server which has `/sys/kernel/btf/vmlinux`:
 
@@ -355,11 +356,37 @@ Or generate from latest ubuntu server which has `/sys/kernel/btf/vmlinux`:
 cp /sys/kernel/btf/vmlinux $(uname -r).btf && tar Jcf $(uname -r).btf.tar.xz $(uname -r).btf
 ```
 
+Now, we can generate the `vmlinux.h`, for example:
+
+```bash
+tar xf 5.4.0-84-generic.btf.tar.xz
+bpftool btf dump file 5.4.0-84-generic.btf format c > vmlinux-ubuntu-bionic-5.4.0-84-generic.h
+```
+
 BTF is required for eBPF CO-RE, to compatible with different kernel versions without rebuild it.
 
 > Note: For more information about `BTF` and `CO-RE`, please read
 > [BTFGen: One Step Closer to Truly Portable eBPF Programs](https://www.inspektor-gadget.io//blog/2022/03/btfgen-one-step-closer-to-truly-portable-ebpf-programs/),
 > [BTFHub](https://github.com/aquasecurity/btfhub) and [Running non CO-RE Tracee](https://aquasecurity.github.io/tracee/v0.6.5/building/nocore-ebpf/)
+
+## Ubuntu 18 (bionic)
+
+To run eBPF on Ubuntu 18 bionic, should statically link binary, for example:
+
+```bash
+docker exec -it -w /git/tea/libbpf_stun_netem tea make static
+```
+
+Then, create a BTF file for Ubuntu 18 bionic:
+
+```bash
+mkdir ~/git/tea/tmp && cd ~/git/tea/tmp
+tar xf ../btf/ubuntu-$(lsb_release -sc).btf.tar.xz -O > ubuntu-$(lsb_release -sc).btf
+ln -sf ubuntu-$(lsb_release -sc).btf vmlinux.btf
+docker exec -it -w /git/tea/tmp tea ../libbpf_stun_netem/libbpf_stun_netem 
+```
+
+Note that there might be no debug logs, bug it really works!
 
 ## Links: TC
 

@@ -34,4 +34,5 @@
 # eBPF files.
 *.skel.h
 *.btf
-
+vmlinux.h
+/tmp
