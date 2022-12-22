@@ -1,4 +1,4 @@
-.PHONY: default install clean
+.PHONY: default install clean static vmlinux
 
 LIBBPF_INCS=/usr/local/libbpf/usr/include
 LIBBPF_LIBS=/usr/local/libbpf/libbpf.a
@@ -14,6 +14,7 @@ OS_CODE=$(shell lsb_release -sc)
 ./vmlinux.btf:
 	rm -f *.btf && tar xf ../btf/ubuntu-$(OS_CODE).btf.tar.xz -O > ubuntu-$(OS_CODE).btf && \
 		ln -sf ubuntu-$(OS_CODE).btf vmlinux.btf
+vmlinux: ./vmlinux.h ./vmlinux.btf
 
 ./libbpf_stun_netem_kern.o: ./libbpf_stun_netem_kern.c ./vmlinux.h Makefile
 	@echo "make -C $(shell pwd)"

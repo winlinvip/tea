@@ -382,23 +382,20 @@ To run eBPF on Ubuntu 18 bionic, should statically build and link in Ubuntu 20 f
 docker exec -it -w /git/tea/libbpf_stun_netem tea make clean static
 ```
 
-Then, create a BTF file for Ubuntu 18 bionic:
-
-```bash
-mkdir ~/git/tea/tmp && cd ~/git/tea/tmp &&
-tar xf ../btf/ubuntu-$(lsb_release -sc).btf.tar.xz -O > ubuntu-$(lsb_release -sc).btf &&
-ln -sf ubuntu-$(lsb_release -sc).btf vmlinux.btf
-```
-
 Now, we start a Ubuntu 18 bionic container, or run in VM server:
 
 ```bash
 mkdir -p ~/git && cd ~/git &&
-docker run -d --privileged --name bionic -it -v $(pwd):/git -w /git/tea \
-    ubuntu:bionic bash &&
-# Install tc(iproute2) and nc(netcat) for verification. 
-docker exec -it bionic apt update -y &&
-docker exec -it bionic apt install -y iproute2 netcat
+cd ~/git/tea && docker build -t tea:bionic -f Dockerfile.ubuntu18.bionic . &&
+cd ~/git && docker run -d --privileged --name bionic -it -v $(pwd):/git -w /git/tea \
+    tea:bionic bash
+```
+
+Then, create a BTF file for Ubuntu 18 bionic:
+
+```bash
+mkdir ~/git/tea/tmp &&
+docker exec -it -w /git/tea/tmp bionic make -f ../libbpf_stun_netem/Makefile vmlinux
 ```
 
 Add 3s delay for STUN packet:
