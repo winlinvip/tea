@@ -169,6 +169,27 @@ docker exec -it -w /git/tea/libbpf_stun_netem tea tc -s qdisc ls dev lo
 
 You can also add loss and other features from [netem](https://wiki.linuxfoundation.org/networking/netem).
 
+## LIBBPF: STUN Ports Query
+
+For WebRTC STUN packets, if you want to know what's the ports are using right now, how to do this? We can use eBPF to 
+filter the STUN packet and stats the target ports of specified process.
+
+Neither lsof nor netstat can do this, they only show UDP 8000 but no target ports. So you can use tcpdump, however it 
+can't filter by the pid but only UDP port, and it's too complex and may hurts performance especially for product 
+environment:
+
+```bash
+lsof -Pn -p $(pidof srs) 2>/dev/null |grep UDP
+#srs     116480 winlin   12u     IPv4 522298      0t0       UDP *:8000
+
+sudo netstat -anp |grep $(pidof srs) |grep udp
+#udp        0      0 0.0.0.0:8000            0.0.0.0:*                           116480/./objs/srs
+
+sudo tcpdump -i any udp port 8000 -n |more
+#07:16:18.187071 IP 10.211.55.12.8000 > 10.211.55.2.54584: UDP, length 161
+#07:16:18.187092 IP 10.211.55.12.8000 > 10.211.55.2.54584: UDP, length 1191
+```
+
 ## TC: STUN Drop All
 
 Using tc to load the eBPF object, drop all STUN packets, including binding request and response packets.
