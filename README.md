@@ -15,16 +15,16 @@ docker run --privileged --rm -it ossrs/tea tc qdisc ls
 For example, build tc_stun_drop_all:
 
 ```bash
-mkdir -p ~/git && cd ~/git
-git clone https://github.com/ossrs/tea.git
+mkdir -p ~/git && cd ~/git &&
+git clone https://github.com/ossrs/tea.git &&
 docker run --rm -it -v $(pwd):/git -w /git/tea/tc_stun_drop_all ossrs/tea:latest make
 ```
 
 Or start a docker in background:
 
 ```bash
-mkdir -p ~/git && cd ~/git
-docker run --privileged -d --name tea -it -v $(pwd):/git -w /git/tea ossrs/tea:latest bash
+mkdir -p ~/git && cd ~/git &&
+docker run --privileged -d --name tea -it -v $(pwd):/git -w /git/tea ossrs/tea:latest bash &&
 docker exec -it -w /git/tea/libbpf_stun_drop_all tea make 
 ```
 
@@ -37,7 +37,7 @@ Using libbpf to load the eBPF object to TC as clsact.
 First, start a docker in background:
 
 ```bash
-mkdir -p ~/git && cd ~/git
+mkdir -p ~/git && cd ~/git &&
 docker run -d --privileged --name tea -it -v $(pwd):/git -w /git/tea \
     ossrs/tea:latest bash
 ```
@@ -90,7 +90,7 @@ Using libbpf and TC netem for STUN packets only.
 First, start a docker in background:
 
 ```bash
-mkdir -p ~/git && cd ~/git
+mkdir -p ~/git && cd ~/git &&
 docker run -d --privileged --name tea -it -v $(pwd):/git -w /git/tea \
     ossrs/tea:latest bash
 ```
@@ -125,11 +125,12 @@ Add 3s delay for STUN packet:
 
 ```bash
 docker exec -it -w /git/tea/libbpf_stun_netem tea \
-    tc qdisc add dev lo root handle 1:0 prio 
+    tc qdisc add dev lo root handle 1:0 prio &&
 docker exec -it -w /git/tea/libbpf_stun_netem tea \
-    tc qdisc add dev lo parent 1:3 handle 3:0 netem delay 3000ms
+    tc qdisc add dev lo parent 1:3 handle 3:0 netem delay 3000ms &&
 docker exec -it -w /git/tea/libbpf_stun_netem tea \
-    tc filter add dev lo parent 1:0 bpf obj tc_index_to_classid_kern.o sec cls da 
+    tc filter add dev lo parent 1:0 bpf obj tc_index_to_classid_kern.o sec cls da &&
+echo "OK"
 ```
 
 > Note: We add a prio qdisc at `1:0`, which default to deliver packets by `1:1` and `1:2`. And we also create a netem 
@@ -175,7 +176,7 @@ Using tc to load the eBPF object, drop all STUN packets, including binding reque
 First, start a docker in background:
 
 ```bash
-mkdir -p ~/git && cd ~/git
+mkdir -p ~/git && cd ~/git &&
 docker run -d --privileged --name tea -it -v $(pwd):/git -w /git/tea \
     ossrs/tea:latest bash
 ```
@@ -213,7 +214,8 @@ docker exec -it tea tc qdisc add dev lo clsact &&
 docker exec -it -w /git/tea/tc_stun_drop_all tea tc filter add dev lo egress bpf obj \
     tc_stun_drop_all_kern.o sec cls da &&
 docker exec -it -w /git/tea/tc_stun_drop_all tea tc filter add dev lo ingress bpf obj \
-    tc_stun_drop_all_kern.o sec cls da
+    tc_stun_drop_all_kern.o sec cls da &&
+echo "OK"
 ```
 
 Now, nc server won't receive STUN packets, and we can check by:
@@ -278,7 +280,7 @@ For detail about TC and eBPF, please read [Links: TC](#links-tc) section.
 Map ports for SRS:
 
 ```bash
-mkdir -p ~/git && cd ~/git
+mkdir -p ~/git && cd ~/git &&
 docker run -d --privileged --name tea -it -v $(pwd):/git -w /git/tea \
     --env CANDIDATE="192.168.3.85" -p 1935:1935 -p 1985:1985 -p 8080:8080 -p 8000:8000/udp \
     ossrs/tea:latest bash
@@ -293,7 +295,8 @@ docker exec -it -w /git/tea/tc_stun_drop_all tea tc qdisc add dev eth0 clsact &&
 docker exec -it -w /git/tea/tc_stun_drop_all tea tc filter add dev eth0 egress bpf obj \
     tc_stun_drop_all_kern.o sec cls da &&
 docker exec -it -w /git/tea/tc_stun_drop_all tea tc filter add dev eth0 ingress bpf obj \
-    tc_stun_drop_all_kern.o sec cls da
+    tc_stun_drop_all_kern.o sec cls da &&
+echo "OK"
 ```
 
 If start a SRS or WebRTC server, all WebRTC clients will fail because STUN is disabled.
@@ -353,13 +356,14 @@ Or generate from latest ubuntu server which has `/sys/kernel/btf/vmlinux`:
 
 ```bash
 # For example, uname -r is 5.15.0-52-generic
-cp /sys/kernel/btf/vmlinux $(uname -r).btf && tar Jcf $(uname -r).btf.tar.xz $(uname -r).btf
+cp /sys/kernel/btf/vmlinux vmlinux-ubuntu-focal-$(uname -r).btf && 
+tar Jcf vmlinux-ubuntu-focal-$(uname -r).btf.tar.xz vmlinux-ubuntu-focal-$(uname -r).btf
 ```
 
 Now, we can generate the `vmlinux.h`, for example:
 
 ```bash
-tar xf 5.4.0-84-generic.btf.tar.xz
+tar xf 5.4.0-84-generic.btf.tar.xz &&
 bpftool btf dump file 5.4.0-84-generic.btf format c > vmlinux-ubuntu-bionic-5.4.0-84-generic.h
 ```
 
@@ -371,22 +375,62 @@ BTF is required for eBPF CO-RE, to compatible with different kernel versions wit
 
 ## Ubuntu 18 (bionic)
 
-To run eBPF on Ubuntu 18 bionic, should statically link binary, for example:
+To run eBPF on Ubuntu 18 bionic, should statically build and link in Ubuntu 20 focal, for example, 
+[STUN NETEM](#libbpf-stun-netem):
 
 ```bash
-docker exec -it -w /git/tea/libbpf_stun_netem tea make static
+docker exec -it -w /git/tea/libbpf_stun_netem tea make clean static
 ```
 
 Then, create a BTF file for Ubuntu 18 bionic:
 
 ```bash
-mkdir ~/git/tea/tmp && cd ~/git/tea/tmp
-tar xf ../btf/ubuntu-$(lsb_release -sc).btf.tar.xz -O > ubuntu-$(lsb_release -sc).btf
+mkdir ~/git/tea/tmp && cd ~/git/tea/tmp &&
+tar xf ../btf/ubuntu-$(lsb_release -sc).btf.tar.xz -O > ubuntu-$(lsb_release -sc).btf &&
 ln -sf ubuntu-$(lsb_release -sc).btf vmlinux.btf
-docker exec -it -w /git/tea/tmp tea ../libbpf_stun_netem/libbpf_stun_netem 
 ```
 
-Note that there might be no debug logs, bug it really works!
+Now, we start a Ubuntu 18 bionic container, or run in VM server:
+
+```bash
+mkdir -p ~/git && cd ~/git &&
+docker run -d --privileged --name bionic -it -v $(pwd):/git -w /git/tea \
+    ubuntu:bionic bash &&
+# Install tc(iproute2) and nc(netcat) for verification. 
+docker exec -it bionic apt update -y &&
+docker exec -it bionic apt install -y iproute2 netcat
+```
+
+Add 3s delay for STUN packet:
+
+```bash
+docker exec -it -w /git/tea/libbpf_stun_netem bionic \
+    tc qdisc add dev lo root handle 1:0 prio &&
+docker exec -it -w /git/tea/libbpf_stun_netem bionic \
+    tc qdisc add dev lo parent 1:3 handle 3:0 netem delay 3000ms &&
+docker exec -it -w /git/tea/libbpf_stun_netem bionic \
+    tc filter add dev lo parent 1:0 bpf obj tc_index_to_classid_kern.o sec cls da && 
+echo "OK"
+```
+
+And attach eBPF bytecode to TC by:
+
+```bash
+docker exec -it -w /git/tea/tmp bionic ../libbpf_stun_netem/libbpf_stun_netem
+```
+
+Then, start tcpdump to show packets, and using nc to send packets:
+
+```bash
+# Start a UDP server, listen at 8000
+docker exec -it bionic nc -l -u -p 8000
+
+# Send STUN binding request.
+docker exec -it -w /git/tea/libbpf_stun_netem bionic bash -c \
+    "echo -en \$(cat binding_request.txt |tr -d [:space:]) |nc -p 55293 -w 1 -u 127.0.0.1 8000"
+```
+
+All STUN packets is delayed.
 
 ## Links: TC
 
