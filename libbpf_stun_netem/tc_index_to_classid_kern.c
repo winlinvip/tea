@@ -13,8 +13,11 @@ int cls_main(struct __sk_buff *ctx) {
     /* After clsact set the tc_classid, here we can get it from the tc_index */
     if (ctx->tc_index && !ctx->tc_classid) {
         ctx->tc_classid = ctx->tc_index;
+        return 0; /* Handle by us, so ignore next filters */
     }
-    return 0; /* TC_ACT_UNSPEC(-1) TC_ACT_OK(0) TC_ACT_RECLASSIFY(1) TC_ACT_SHOT(2) */
+
+    /* Apply other filter, because this packet is not processed by clsact */
+    return 3; /* TC_ACT_UNSPEC(-1) TC_ACT_OK(0) TC_ACT_RECLASSIFY(1) TC_ACT_SHOT(2) TC_ACT_PIPE(3) */
 }
 char __license[] SEC("license") = "GPL";
 
