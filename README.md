@@ -169,6 +169,74 @@ docker exec -it -w /git/tea/libbpf_stun_netem tea tc -s qdisc ls dev lo
 
 You can also add loss and other features from [netem](https://wiki.linuxfoundation.org/networking/netem).
 
+## LIBBPF: WebRTC Packets Identify
+
+For WebRTC UDP packets, to identify STUN/DTLS/RTP/RTCP packets.
+
+First, start a docker in background:
+
+```bash
+mkdir -p ~/git && cd ~/git &&
+docker run -d --privileged --name tea -it -v $(pwd):/git -w /git/tea \
+    ossrs/tea:latest bash
+```
+
+Then, start tcpdump to show packets, and using nc to send packets:
+
+```bash
+# Send STUN binding request.
+docker exec -it -w /git/tea/libbpf_rtc_packets_identify tea bash -c \
+    "echo -en \$(cat binding_request.txt |tr -d [:space:]) |nc -p 55293 -w 1 -u 127.0.0.1 8000"
+
+# Send STUN binding response.
+docker exec -it -w /git/tea/libbpf_rtc_packets_identify tea bash -c \
+    "echo -en \$(cat binding_response.txt |tr -d [:space:]) |nc -p 55295 -w 1 -u 127.0.0.1 8000"
+
+# Send DTLS Server Hello message
+docker exec -it -w /git/tea/libbpf_rtc_packets_identify tea bash -c \
+    "echo -en \$(cat dtls_server_hello.txt |tr -d [:space:]) |nc -p 55295 -w 1 -u 127.0.0.1 8000"
+
+# Send RTP packet(Opus)
+docker exec -it -w /git/tea/libbpf_rtc_packets_identify tea bash -c \
+    "echo -en \$(cat rtp_opus.txt |tr -d [:space:]) |nc -p 55295 -w 1 -u 127.0.0.1 8000"
+
+# Send RTP packet(STAP, H.264 SPS/PPS)
+docker exec -it -w /git/tea/libbpf_rtc_packets_identify tea bash -c \
+    "echo -en \$(cat rtp_h264_stap.txt |tr -d [:space:]) |nc -p 55295 -w 1 -u 127.0.0.1 8000"
+
+# Send RTCP packet(SR, Sender Report)
+docker exec -it -w /git/tea/libbpf_rtc_packets_identify tea bash -c \
+    "echo -en \$(cat rtcp_sr.txt |tr -d [:space:]) |nc -p 55295 -w 1 -u 127.0.0.1 8000"
+
+# Send RTCP packet(PLI, Picture Loss Indication)
+docker exec -it -w /git/tea/libbpf_rtc_packets_identify tea bash -c \
+    "echo -en \$(cat rtcp_pli.txt |tr -d [:space:]) |nc -p 55295 -w 1 -u 127.0.0.1 8000"
+```
+
+> Note: You will see the packets printed by tcpdump and nc server, before installing the eBPF TC qdisc.
+
+Next, build the eBPF program:
+
+```bash
+docker exec -it -w /git/tea/libbpf_rtc_packets_identify tea make 
+```
+
+And attach eBPF bytecode to TC by:
+
+```bash
+docker exec -it -w /git/tea/libbpf_rtc_packets_identify tea ./libbpf_rtc_packets_identify 
+```
+
+All STUN packets are dropped:
+
+```text
+Identify WebRTC packets...
+              nc-220091  [001] d.... 52468.651187: bpf_trace_printk: Got STUN type=0x00, 55293=>8000
+              nc-221981  [002] d.... 53112.085847: bpf_trace_printk: Got PLI 55293=>8000, len=54
+```
+
+For detail about TC and eBPF, please read [Links: TC](#links-tc) and [Links: LIBBPF](#links-libbpf) section.
+
 ## LIBBPF: STUN Ports Query
 
 For WebRTC STUN packets, if you want to know what's the ports are using right now, how to do this? We can use eBPF to 

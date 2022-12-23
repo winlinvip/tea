@@ -36,3 +36,5 @@
 *.btf
 vmlinux.h
 /tmp
+t.sh
+
