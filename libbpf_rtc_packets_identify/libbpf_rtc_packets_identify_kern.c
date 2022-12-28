@@ -7,10 +7,15 @@
 #define ETH_P_IP   0x0800    /* Internet Protocol packet    */
 
 const volatile __u32 target_port = 0;
+const volatile __u32 target_sport = 0;
+const volatile __u32 target_dport = 0;
 const volatile __u32 target_stun = 1;
 const volatile __u32 target_dtls = 1;
 const volatile __u32 target_rtcp = 1;
+const volatile __u32 target_pli = 1;
 const volatile __u32 target_rtp = 1;
+
+char buf[1024] = {};
 
 SEC("tc")
 int hello(struct __sk_buff *skb) {
@@ -32,6 +37,8 @@ int hello(struct __sk_buff *skb) {
     __u16 source = bpf_htons(udph->source);
     __u16 dest = bpf_htons(udph->dest);
     if (target_port && source != target_port && dest != target_port) return TC_ACT_OK;
+    if (target_sport && source != target_sport) return TC_ACT_OK;
+    if (target_dport && dest != target_dport) return TC_ACT_OK;
 
     /* Identify protocol from UDP payload */
     __u64 *payload = (__u64*)(udph + 1);
@@ -41,7 +48,7 @@ int hello(struct __sk_buff *skb) {
 
     /* See https://github.com/ossrs/srs/blob/5.0release/trunk/src/app/srs_app_rtc_server.cpp#L126 */
     if (val0 == 0x00 || val0 == 0x01) {
-        if (target_stun) bpf_printk("Got STUN type=0x%02x, %d=>%d", val0, source, dest);
+        if (target_stun) bpf_printk("Got STUN type=0x%02x, %s", val0, buf);
     } else if (val0 > 19 && val0 < 64) {
         if (target_dtls) bpf_printk("Got DTLS type=0x%02x, %d=>%d", val0, source, dest);
     } else if ((val0 & 0xC0) == 0x80) {
@@ -50,7 +57,7 @@ int hello(struct __sk_buff *skb) {
             __u8 pt = val1;
             /* PLI: PT=PSFB(206), FMT=PLI(1), see https://github.com/ossrs/srs/blob/5.0release/trunk/src/kernel/srs_kernel_rtc_rtcp.cpp#L1445 */
             if (pt == 206 && (val0 & 0x1f) == 0x01) {
-                if (target_rtcp) bpf_printk("Got PLI %d=>%d, len=%d", source, dest, skb->len);
+                if (target_pli) bpf_printk("Got PLI %d=>%d, len=%d", source, dest, skb->len);
             } else {
                 if (target_rtcp) bpf_printk("Got RTCP %d=>%d, pt=%d", source, dest, pt);
             }

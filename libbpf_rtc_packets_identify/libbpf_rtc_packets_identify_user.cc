@@ -29,21 +29,24 @@ struct BpfHandler {
 };
 
 void usage(int argc, char** argv) {
-    printf("Usage: %s [--ifindex=1|2|3] [--ingress=1|0] [--port=val] [--stun=1|0] [--dtls=1|0] [--rtcp=1|0] [--rtp=1|0] [--help|-h]\n", argv[0]);
+    printf("Usage: %s [--ifindex=1|2|3] [--ingress=1|0] [--port=val] [--sport=val] [--dport=val] [--stun=1|0] [--dtls=1|0] [--rtcp=1|0] [--pli=1|0] [--rtp=1|0] [--help|-h]\n", argv[0]);
     printf("        --ifindex=1|2|3     The interface index to attach, use \"ip a\" to query. Default: 1\n");
     printf("        --ingress=1|0       Whether filter ingress packet. Default: 0\n");
     printf("        --port=val          The port to filter the source or dest, 0 to match all. Default: 0\n");
+    printf("        --sport=val         The source port to filter, 0 to match all. Default: 0\n");
+    printf("        --dport=val         The dest port to filter, 0 to match all. Default: 0\n");
     printf("        --stun=1|0          Whether filter STUN packet. Default: 1\n");
     printf("        --dtls=1|0          Whether filter DTLS packet. Default: 1\n");
     printf("        --rtcp=1|0          Whether filter RTCP packet. Default: 1\n");
+    printf("        --pli=1|0           Whether filter RTCP(PLI) packet. Default: 1\n");
     printf("        --rtp=1|0           Whether filter RTP packet. Default: 1\n");
     printf("Example:\n");
     printf("    %s --help\n", argv[0]);
-    printf("    %s --ifindex=1 --port=8000 --stun=1 --dtls=0 --rtcp=0 --rtp=0\n", argv[0]);
+    printf("    %s --ifindex=1 --port=8000 --stun=1 --dtls=0 --rtcp=0 --pli=1 --rtp=0\n", argv[0]);
 }
 
 int main(int argc, char** argv) {
-    int ifindex = 1, ingress = 0, target_port = 0, target_stun = 1, target_dtls = 1, target_rtcp = 1, target_rtp = 1;
+    int ifindex = 1, ingress = 0, target_port = 0, target_sport = 0, target_dport = 0, target_stun = 1, target_dtls = 1, target_rtcp = 1, target_pli = 1, target_rtp = 1;
     for (int i = 1; i < argc; i++) {
         std::string arg = argv[i];
         if (arg == "-h" || arg == "--help") {
@@ -54,18 +57,24 @@ int main(int argc, char** argv) {
             ingress = ::atoi(arg.substr(arg.find("=") + 1).c_str());
         } else if (arg.find("--port=") == 0) {
             target_port = ::atoi(arg.substr(arg.find("=") + 1).c_str());
+        } else if (arg.find("--sport=") == 0) {
+            target_sport = ::atoi(arg.substr(arg.find("=") + 1).c_str());
+        } else if (arg.find("--dport=") == 0) {
+            target_dport = ::atoi(arg.substr(arg.find("=") + 1).c_str());
         } else if (arg.find("--stun=") == 0) {
             target_stun = ::atoi(arg.substr(arg.find("=") + 1).c_str());
         } else if (arg.find("--dtls=") == 0) {
             target_dtls = ::atoi(arg.substr(arg.find("=") + 1).c_str());
         } else if (arg.find("--rtcp=") == 0) {
             target_rtcp = ::atoi(arg.substr(arg.find("=") + 1).c_str());
+        } else if (arg.find("--pli=") == 0) {
+            target_pli = ::atoi(arg.substr(arg.find("=") + 1).c_str());
         } else if (arg.find("--rtp=") == 0) {
             target_rtp = ::atoi(arg.substr(arg.find("=") + 1).c_str());
         }
     }
-    printf("Run with ifindex=%d, ingress=%d, port=%d, stun=%d, dtls=%d, rtcp=%d, rtp=%d\n",
-        ifindex, ingress, target_port, target_stun, target_dtls, target_rtcp, target_rtp);
+    printf("Run with ifindex=%d, ingress=%d, port=%d, sport=%d, dport=%d, stun=%d, dtls=%d, rtcp=%d, pli=%d, rtp=%d\n",
+        ifindex, ingress, target_port, target_sport, target_dport, target_stun, target_dtls, target_rtcp, target_pli, target_rtp);
 
     libbpf_set_strict_mode(LIBBPF_STRICT_ALL);
 
@@ -87,9 +96,12 @@ int main(int argc, char** argv) {
 
     // Setup the config as global variable for eBPF.
     hdr.obj->rodata->target_port = target_port;
+    hdr.obj->rodata->target_sport = target_sport;
+    hdr.obj->rodata->target_dport = target_dport;
     hdr.obj->rodata->target_stun = target_stun;
     hdr.obj->rodata->target_dtls = target_dtls;
     hdr.obj->rodata->target_rtcp = target_rtcp;
+    hdr.obj->rodata->target_pli = target_pli;
     hdr.obj->rodata->target_rtp = target_rtp;
 
     int r0;
