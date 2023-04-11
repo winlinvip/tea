@@ -42,6 +42,18 @@ docker run -d --privileged --name tea -it -v $(pwd):/git -w /git/tea \
     ossrs/tea:latest bash
 ```
 
+Next, build the eBPF program:
+
+```bash
+docker exec -it -w /git/tea/libbpf_stun_drop_all tea make 
+```
+
+And attach eBPF bytecode to TC by:
+
+```bash
+docker exec -it -w /git/tea/libbpf_stun_drop_all tea ./libbpf_stun_drop_all 
+```
+
 Then, start tcpdump to show packets, and using nc to send packets:
 
 ```bash
@@ -62,19 +74,7 @@ docker exec -it -w /git/tea/libbpf_stun_drop_all tea bash -c \
 
 > Note: You will see the packets printed by tcpdump and nc server, before installing the eBPF TC qdisc.
 
-Next, build the eBPF program:
-
-```bash
-docker exec -it -w /git/tea/libbpf_stun_drop_all tea make 
-```
-
-And attach eBPF bytecode to TC by:
-
-```bash
-docker exec -it -w /git/tea/libbpf_stun_drop_all tea ./libbpf_stun_drop_all 
-```
-
-All STUN packets are dropped:
+All STUN packets will be dropped:
 
 ```text
 Dropping all STUN packets...
@@ -94,26 +94,6 @@ mkdir -p ~/git && cd ~/git &&
 docker run -d --privileged --name tea -it -v $(pwd):/git -w /git/tea \
     ossrs/tea:latest bash
 ```
-
-Then, start tcpdump to show packets, and using nc to send packets:
-
-```bash
-# Capture all UDP packets.
-docker exec -it tea tcpdump udp -i any -X
-
-# Start a UDP server, listen at 8000
-docker exec -it tea nc -l -u 8000
-
-# Send STUN binding request.
-docker exec -it -w /git/tea/libbpf_stun_netem tea bash -c \
-    "echo -en \$(cat binding_request.txt |tr -d [:space:]) |nc -p 55293 -w 1 -u 127.0.0.1 8000"
-
-# Send STUN binding response.
-docker exec -it -w /git/tea/libbpf_stun_netem tea bash -c \
-    "echo -en \$(cat binding_response.txt |tr -d [:space:]) |nc -p 55295 -w 1 -u 127.0.0.1 8000"
-```
-
-> Note: You will see the packets printed by tcpdump and nc server, before installing the eBPF TC qdisc.
 
 Next, build the eBPF program:
 
@@ -145,6 +125,26 @@ And attach eBPF bytecode to TC by:
 ```bash
 docker exec -it -w /git/tea/libbpf_stun_netem tea ./libbpf_stun_netem 
 ```
+
+Then, start tcpdump to show packets, and using nc to send packets:
+
+```bash
+# Capture all UDP packets.
+docker exec -it tea tcpdump udp -i any -X
+
+# Start a UDP server, listen at 8000
+docker exec -it tea nc -l -u 8000
+
+# Send STUN binding request.
+docker exec -it -w /git/tea/libbpf_stun_netem tea bash -c \
+    "echo -en \$(cat binding_request.txt |tr -d [:space:]) |nc -p 55293 -w 1 -u 127.0.0.1 8000"
+
+# Send STUN binding response.
+docker exec -it -w /git/tea/libbpf_stun_netem tea bash -c \
+    "echo -en \$(cat binding_response.txt |tr -d [:space:]) |nc -p 55295 -w 1 -u 127.0.0.1 8000"
+```
+
+> Note: You will see the packets printed by tcpdump and nc server, before installing the eBPF TC qdisc.
 
 If send STUN messages, you'll find the packet is arrived after 3s：
 
@@ -181,7 +181,19 @@ docker run -d --privileged --name tea -it -v $(pwd):/git -w /git/tea \
     ossrs/tea:latest bash
 ```
 
-Then, start tcpdump to show packets, and using nc to send packets:
+Next, build the eBPF program:
+
+```bash
+docker exec -it -w /git/tea/libbpf_rtc_packets_identify tea make 
+```
+
+And attach eBPF bytecode to TC by:
+
+```bash
+docker exec -it -w /git/tea/libbpf_rtc_packets_identify tea ./libbpf_rtc_packets_identify 
+```
+
+Then, use nc to send packets:
 
 ```bash
 # Send STUN binding request.
@@ -215,19 +227,7 @@ docker exec -it -w /git/tea/libbpf_rtc_packets_identify tea bash -c \
 
 > Note: You will see the packets printed by tcpdump and nc server, before installing the eBPF TC qdisc.
 
-Next, build the eBPF program:
-
-```bash
-docker exec -it -w /git/tea/libbpf_rtc_packets_identify tea make 
-```
-
-And attach eBPF bytecode to TC by:
-
-```bash
-docker exec -it -w /git/tea/libbpf_rtc_packets_identify tea ./libbpf_rtc_packets_identify 
-```
-
-All STUN packets are dropped:
+All WebRTC packets are identified:
 
 ```text
 Identify WebRTC packets...
@@ -236,27 +236,6 @@ Identify WebRTC packets...
 ```
 
 For detail about TC and eBPF, please read [Links: TC](#links-tc) and [Links: LIBBPF](#links-libbpf) section.
-
-## LIBBPF: STUN Ports Query
-
-For WebRTC STUN packets, if you want to know what's the ports are using right now, how to do this? We can use eBPF to 
-filter the STUN packet and stats the target ports of specified process.
-
-Neither lsof nor netstat can do this, they only show UDP 8000 but no target ports. So you can use tcpdump, however it 
-can't filter by the pid but only UDP port, and it's too complex and may hurts performance especially for product 
-environment:
-
-```bash
-lsof -Pn -p $(pidof srs) 2>/dev/null |grep UDP
-#srs     116480 winlin   12u     IPv4 522298      0t0       UDP *:8000
-
-sudo netstat -anp |grep $(pidof srs) |grep udp
-#udp        0      0 0.0.0.0:8000            0.0.0.0:*                           116480/./objs/srs
-
-sudo tcpdump -i any udp port 8000 -n |more
-#07:16:18.187071 IP 10.211.55.12.8000 > 10.211.55.2.54584: UDP, length 161
-#07:16:18.187092 IP 10.211.55.12.8000 > 10.211.55.2.54584: UDP, length 1191
-```
 
 ## TC: STUN Drop All
 
@@ -268,6 +247,23 @@ First, start a docker in background:
 mkdir -p ~/git && cd ~/git &&
 docker run -d --privileged --name tea -it -v $(pwd):/git -w /git/tea \
     ossrs/tea:latest bash
+```
+
+Next, build the eBPF program:
+
+```bash
+docker exec -it -w /git/tea/tc_stun_drop_all tea make 
+```
+
+And attach eBPF bytecode to TC by:
+
+```bash
+docker exec -it tea tc qdisc add dev lo clsact &&
+docker exec -it -w /git/tea/tc_stun_drop_all tea tc filter add dev lo egress bpf obj \
+    tc_stun_drop_all_kern.o sec cls da &&
+docker exec -it -w /git/tea/tc_stun_drop_all tea tc filter add dev lo ingress bpf obj \
+    tc_stun_drop_all_kern.o sec cls da &&
+echo "OK"
 ```
 
 Then, start tcpdump to show packets, and using nc to send packets:
@@ -289,23 +285,6 @@ docker exec -it -w /git/tea/tc_stun_drop_all tea bash -c \
 ```
 
 > Note: You will see the packets printed by tcpdump and nc server, before installing the eBPF TC qdisc.
-
-Next, build the eBPF program:
-
-```bash
-docker exec -it -w /git/tea/tc_stun_drop_all tea make 
-```
-
-And attach eBPF bytecode to TC by:
-
-```bash
-docker exec -it tea tc qdisc add dev lo clsact &&
-docker exec -it -w /git/tea/tc_stun_drop_all tea tc filter add dev lo egress bpf obj \
-    tc_stun_drop_all_kern.o sec cls da &&
-docker exec -it -w /git/tea/tc_stun_drop_all tea tc filter add dev lo ingress bpf obj \
-    tc_stun_drop_all_kern.o sec cls da &&
-echo "OK"
-```
 
 Now, nc server won't receive STUN packets, and we can check by:
 
@@ -471,7 +450,7 @@ To run eBPF on Ubuntu 18 bionic, should statically build and link in Ubuntu 20 f
 docker exec -it -w /git/tea/libbpf_stun_netem tea make clean static
 ```
 
-Now, we start a Ubuntu 18 bionic container, or run in VM server:
+Now, we start an Ubuntu 18 bionic container, or run in VM server:
 
 ```bash
 mkdir -p ~/git && cd ~/git &&
